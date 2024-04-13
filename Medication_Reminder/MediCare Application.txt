@@ -1,0 +1,521 @@
+HTML [index.html]:-
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Medication Reminder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>MediCare Application</h1>
+        <div class="input-section">
+            <label for="medName">Medication Name:</label>
+            <input type="text" id="medName">
+            <label for="medTime">Time:</label>
+            <input type="time" id="medTime">
+            <label for="frequency">Frequency (in hours):</label>
+            <input type="number" id="frequency" min="1" value="1">
+            <button onclick="setReminder()">Set Reminder</button>
+            <button onclick="togglePhoneNumbers()">Show/Hide Contact Numbers</button>
+        <div id="phoneNumbers" style="display: none;">
+            <p>Dr.Khana : +91 9560160521</p>
+            <p>Dr. Ankit : +91 9874125432</p>
+            <p>Emergency: 100</p>
+        </div>
+        </div>
+        <div id="itemListContainer"></div>
+        <button onclick="addItemToList()">Add Item to List</button>
+        <div id="reminderList"></div>
+        <div class="info-buttons">
+            <button onclick="showAbout()">About</button>
+            <button onclick="showInstructions()">Instructions</button>
+        </div>
+    </div>
+    <div>
+        <div class="wave"></div>
+        <div class="wave"></div>
+        <div class="wave"></div>
+     </div>
+    <script src="app.js"></script>
+</body>
+</html>
+
+
+
+JavaScript [app.js]:-
+
+
+const reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+
+function sendNotification(reminder) {
+    // Example: Sending a notification via email
+    const userEmail = 'shhreys1611@gmail.com'; // Replace with the user's email
+    const subject = 'Medication Reminder';
+    const message = `It's time to take your ${reminder.name} medication at ${reminder.time}.`;
+
+    // Example: Use an email service API to send an email
+    // Implement similar functionalities for SMS or push notifications
+    fetch('https://exampleemailapi.com/send', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: userEmail, subject, message }),
+    })
+        .then(response => {
+            if (response.ok) {
+                console.log('Notification sent successfully.');
+            } else {
+                throw new Error('Notification not sent.');
+            }
+        })
+        .catch(error => {
+            console.error('Error sending notification:', error);
+        });
+}
+
+function setReminder() {
+    const medName = document.getElementById('medName').value;
+    const medTime = document.getElementById('medTime').value;
+    const frequency = parseInt(document.getElementById('frequency').value);
+
+    if (medName.trim() !== '' && medTime.trim() !== '' && frequency > 0) {
+        const reminder = {
+            name: medName,
+            time: medTime,
+            frequency: frequency
+        };
+
+        reminders.push(reminder);
+
+        if (frequency < 24) {
+            for (let i = 1; i <= Math.floor(24 / frequency); i++) {
+                const repeatTime = addHours(medTime, frequency * i);
+                const repeatReminder = {
+                    name: medName,
+                    time: repeatTime,
+                    frequency: frequency
+                };
+                reminders.push(repeatReminder);
+            }
+        }
+
+        localStorage.setItem('reminders', JSON.stringify(reminders));
+        displayReminders();
+        clearInputFields();
+
+        // Request permission for notifications
+        if (Notification.permission !== 'granted') {
+            Notification.requestPermission();
+        }
+
+        // Schedule a notification
+        const time = new Date().getTime() + frequency * 60 * 60 * 1000; // Convert frequency to milliseconds
+        const notificationMessage = `Time to take your ${medName} medication!`;
+
+        setTimeout(() => {
+            if (Notification.permission === 'granted') {
+                new Notification('Medication Reminder', { body: notificationMessage });
+                playSound('C:\Users\shers\Desktop\Coding\HTML\images\notification.mp3');
+            }
+        }, time);
+    }
+    updateDashboard();
+    sendNotification(reminders);
+}
+
+function addHours(time, hours) {
+    const [hour, minute] = time.split(':');
+    const date = new Date(0, 0, 0, hour, minute);
+    date.setHours(date.getHours() + hours);
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function playSound(soundFile) {
+    const audio = new Audio(soundFile);
+    audio.play();
+}
+
+function displayReminders() {
+    const reminderList = document.getElementById('reminderList');
+    reminderList.innerHTML = '';
+
+    reminders.forEach((reminder, index) => {
+        const reminderItem = document.createElement('div');
+        reminderItem.classList.add('reminder-item');
+
+        reminderItem.innerHTML = `
+            <strong>${reminder.name}</strong> - ${reminder.time} - Every ${reminder.frequency} hours
+            <input type="number" placeholder="Dosage taken" onchange="updateDosageTaken(${index}, this.value)">
+            <button onclick="editReminder(${index})">Edit</button>
+            <button onclick="deleteReminder(${index})">Delete</button>
+        `;
+
+        reminderList.appendChild(reminderItem);
+    });
+
+    updateDashboard();
+}
+
+function clearInputFields() {
+    document.getElementById('medName').value = '';
+    document.getElementById('medTime').value = '';
+    document.getElementById('frequency').value = '1';
+}
+
+function deleteReminder(index) {
+    reminders.splice(index, 1);
+    localStorage.setItem('reminders', JSON.stringify(reminders));
+    displayReminders();
+    updateDashboard();
+}
+
+function showAbout() {
+    alert('This is a Medication Reminder Web Application. It helps you schedule and receive reminders for your medication.');
+}
+
+function showInstructions() {
+    alert('To set a reminder, enter the medication name, time, and frequency. Then click "Set Reminder".');
+}
+
+function updateDosageTaken(index, dosageTaken) {
+    reminders[index].dosageTaken = dosageTaken; // Add a dosageTaken property to reminders
+
+    // Update local storage and refresh the display
+    localStorage.setItem('reminders', JSON.stringify(reminders));
+    displayReminders();
+    updateDashboard();
+}
+
+function editReminder(index) {
+    const medName = document.getElementById('medName');
+    const medTime = document.getElementById('medTime');
+    const frequency = document.getElementById('frequency');
+
+    medName.value = reminders[index].name;
+    medTime.value = reminders[index].time;
+    frequency.value = reminders[index].frequency;
+
+    reminders.splice(index, 1);
+    localStorage.setItem('reminders', JSON.stringify(reminders));
+    displayReminders();
+}
+
+function updateReminder(index) {
+    const medName = document.getElementById('medName').value;
+    const medTime = document.getElementById('medTime').value;
+    const frequency = parseInt(document.getElementById('frequency').value);
+
+    if (medName.trim() !== '' && medTime.trim() !== '' && frequency > 0) {
+        const reminder = {
+            name: medName,
+            time: medTime,
+            frequency: frequency
+        };
+
+        reminders.splice(index, 0, reminder);
+        localStorage.setItem('reminders', JSON.stringify(reminders));
+        displayReminders();
+        clearInputFields();
+    }
+}
+
+function updateDashboard() {
+    const totalReminders = reminders.length;
+    document.getElementById('totalReminders').innerText = reminders.length;
+
+    const currentTime = new Date().getTime();
+    const upcomingReminders = reminders.filter(reminder => new Date(reminder.time).getTime() > currentTime).length;
+
+    document.getElementById('upcomingReminders').innerText = upcomingReminders;
+
+    const upcomingList = document.getElementById('upcomingList');
+    upcomingList.innerHTML = '';
+
+    const upcomingRemindersList = reminders.filter(reminder => new Date(reminder.time).getTime() > currentTime);
+    upcomingRemindersList.forEach(reminder => {
+        const listItem = document.createElement('li');
+        listItem.innerText = `${reminder.name} - ${reminder.time}`;
+        upcomingList.appendChild(listItem);
+    });
+}
+
+function checkExpiredReminders() {
+    const currentTime = new Date().getTime();
+
+    const validReminders = reminders.filter(reminder => new Date(reminder.time).getTime() > currentTime);
+    reminders.length = 0;
+    reminders.push(...validReminders);
+
+    localStorage.setItem('reminders', JSON.stringify(reminders));
+    displayReminders();
+    updateDashboard();
+}
+
+function showPhoneNumbers() {
+    const phoneNumbers = document.getElementById('phoneNumbers');
+    phoneNumbers.style.display = 'block';
+}
+
+function togglePhoneNumbers() {
+    const phoneNumbers = document.getElementById('phoneNumbers');
+    phoneNumbers.style.display = (phoneNumbers.style.display === 'none') ? 'block' : 'none';
+}
+
+function saveItemList(itemList) {
+    localStorage.setItem('itemList', JSON.stringify(itemList));
+}
+
+function loadItemList() {
+    return JSON.parse(localStorage.getItem('itemList')) || [];
+}
+
+function displayItemList() {
+    const itemList = loadItemList();
+    const itemListContainer = document.getElementById('itemListContainer');
+
+    // Clear previous items
+    itemListContainer.innerHTML = '';
+
+    // Display items
+    const listContainer = document.createElement('div');
+    listContainer.classList.add('list-container');
+
+    const heading = document.createElement('h2');
+    heading.textContent = 'Medicine List';
+    listContainer.appendChild(heading);
+
+    itemList.forEach((item, index) => {
+        const listItem = document.createElement('div');
+        listItem.classList.add('item-list-item');
+
+        const itemText = document.createElement('span');
+        itemText.textContent = `${index + 1}. ${item}`;
+        listItem.appendChild(itemText);
+
+        const removeButton = document.createElement('button');
+        removeButton.textContent = 'Remove';
+        removeButton.onclick = () => removeItemFromList(index);
+        listItem.appendChild(removeButton);
+
+        listContainer.appendChild(listItem);
+    });
+
+    itemListContainer.appendChild(listContainer);
+}
+
+function addItemToList() {
+    const newItem = prompt('Enter a new item:');
+    if (newItem) {
+        const itemList = loadItemList();
+        itemList.push(newItem);
+        saveItemList(itemList);
+        displayItemList();
+    }
+}
+
+function removeItemFromList(index) {
+    const itemList = loadItemList();
+    itemList.splice(index, 1);
+    saveItemList(itemList);
+    displayItemList();
+}
+
+setInterval(checkExpiredReminders, 600000);
+
+displayReminders();
+updateDashboard();
+
+
+
+CSS [styles.css]:-
+
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    /*background: linear-gradient(to bottom, #4CAF50, #2196F3);*/
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    transition: all 0.3s;
+    margin: auto;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: auto;
+    background: linear-gradient(315deg, rgb(42, 0, 101) 3%, rgb(92, 60, 206) 38%, rgb(226, 5, 5)68%, rgb(140, 3, 3) 98%);
+    animation: gradient 15s ease infinite;
+    background-size: 400% 400%;
+    background-attachment: fixed;
+}
+
+.container {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    padding: 40px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    color: #333;
+    transition: all 0.3s;
+}
+
+h1 {
+    margin-bottom: 30px;
+    color: #2196F3;
+}
+
+.input-section {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center; /* Added alignment */
+}
+
+input,
+button {
+    margin: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    transition: all 0.3s;
+}
+
+button {
+    background-color: #4CAF50;
+    color: #fff;
+    cursor: pointer;
+}
+
+.info-buttons {
+    margin-top: 30px;
+    display: flex;
+    justify-content: center;
+}
+
+.info-buttons button {
+    margin: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.info-buttons button:nth-of-type(1) {
+    background-color: #2196F3;
+}
+
+.info-buttons button:nth-of-type(2) {
+    background-color: #f44336;
+}
+
+.info-buttons button:hover {
+    opacity: 0.8;
+}
+
+#phoneNumbers {
+    display: none;
+    transition: opacity 0.5s ease;
+}
+
+.container button {
+    margin-bottom: 10px;
+}
+
+.list-container {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 8px;
+    margin-top: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.item-list-item {
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item-list-item button {
+    background-color: #f44336;
+    color: #fff;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.item-list-item button:hover {
+    background-color: #d32f2f;
+}
+
+#reminderList {
+    max-height: 300px; 
+    overflow-y: auto;
+}
+
+@keyframes gradient {
+    0% {
+        background-position: 0% 0%;
+    }
+    50% {
+        background-position: 100% 100%;
+    }
+    100% {
+        background-position: 0% 0%;
+    }
+}
+
+.wave {
+    background: rgb(255 255 255 / 25%);
+    border-radius: 1000% 1000% 0 0;
+    position: fixed;
+    width: 200%;
+    height: 12em;
+    animation: wave 10s -3s linear infinite;
+    transform: translate3d(0, 0, 0);
+    opacity: 0.8;
+    bottom: 0;
+    left: 0;
+    z-index: -1;
+}
+
+.wave:nth-of-type(2) {
+    bottom: -1.25em;
+    animation: wave 18s linear reverse infinite;
+    opacity: 0.8;
+}
+
+.wave:nth-of-type(3) {
+    bottom: -2.5em;
+    animation: wave 20s -1s reverse infinite;
+    opacity: 0.9;
+}
+
+@keyframes wave {
+    2% {
+        transform: translateX(1);
+    }
+
+    25% {
+        transform: translateX(-25%);
+    }
+
+    50% {
+        transform: translateX(-50%);
+    }
+
+    75% {
+        transform: translateX(-25%);
+    }
+
+    100% {
+        transform: translateX(1);
+    }
+}
